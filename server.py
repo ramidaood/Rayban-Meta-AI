@@ -78,7 +78,7 @@ def main():
                 break
 
             # Optional: Sleep to reduce CPU usage
-            time.sleep(0.1)
+            time.sleep(0.01)
 
         # Clean up
         cv2.destroyAllWindows()
