@@ -1,89 +1,72 @@
-# Visionary Assistance Project 🌟
+# AI-Powered Navigation Assistance for the Visually Impaired
 
-## Overview
+## **Project Overview**
 
-Welcome to the **Visionary Assistance Project**, created by **Rami Daood** and **Mariana Dakwar**. Our project leverages cutting-edge technology to empower blind and visually impaired individuals by enabling them to "see" their surroundings through smart Ray-Ban Meta Glasses with integrated voice control.
+This project leverages Ray-Ban Meta smart glasses equipped with a live camera feed and spatial audio to assist blind and visually impaired individuals. The system integrates AI-driven obstacle detection and navigation guidance through localized audio cues to enhance user mobility and independence.
 
-## Purpose
+## **Key Features**
 
-The primary goal of this project is to enhance the independence and confidence of visually impaired individuals by providing them with real-time information about their surroundings. Using innovative AI and voice-activated commands, we ensure seamless interaction with the world.
+- **Real-Time Obstacle Detection**: Uses AI to recognize and identify objects in the environment.
+- **Text Reading**: Reads text from signs, menus, and documents using OCR.
+- **Color and Object Recognition**: Identifies objects and colors for better decision-making.
+- **Spatial Audio Guidance**: Provides intuitive left/right navigation cues based on detected obstacles.
+- **Live Feed Processing**: Captures real-time video from the glasses and processes it on a backend server.
+- **Cloud-Enabled Backend**: A fast, scalable system for AI inference and data processing.
 
----
+## **Technology Stack**
 
-## Features
+### **Hardware**
 
-- **Voice-Activated Command System**:
-  - Trigger the glasses to capture a photo using a simple voice command.
-  
-- **Real-Time Analysis**:
-  - The captured photo is sent to a **customized GPT-powered server**.
-  - The server processes the image, analyzes its contents, and generates a detailed response.
+- Ray-Ban Meta Smart Glasses
+- Mobile Device for Communication
 
-- **Auditory Feedback**:
-  - The response is transmitted back to the glasses and read aloud to the user, enabling them to comprehend the environment or objects around them.
+### **Software & Libraries**
 
----
+- **Backend**: Python (Flask, FastAPI), REST APIs, WebSockets
+- **AI Models**: OpenCV, TensorFlow, YOLO (for object detection)
+- **OCR**: Tesseract, Google Vision API
+- **Cloud Services**: AWS/GCP/Azure for hosting
+- **Communication**: WhatsApp/Messenger API
 
-## Technologies Used
+## **Project Timeline**
 
-- **Hardware**:
-  - [Ray-Ban Meta Glasses](https://www.ray-ban.com/)
-  
-- **Software & AI**:
-  - OpenAI GPT for personalized natural language analysis.
-  - Custom server setup for image processing and voice response.
-  
-- **Integration**:
-  - Voice recognition APIs.
-  - Audio synthesis for seamless auditory feedback.
+This project is currently in the **Backend Research Phase**.
+The full development plan is structured between **February 10, 2025 – August 10, 2025**.
 
----
+### **Milestones:**
 
-## How It Works
+1. **Backend Research & API Integration** (March 2025)
+2. **OCR & Environment Recognition Development** (April 2025)
+3. **AI Model Training for Object and Color Recognition** (May 2025)
+4. **Backend & AI Integration** (June 2025)
+5. **Testing and Optimization** (July 2025)
+6. **Final Deployment & Documentation** (August 2025)
 
-1. **Photo Capture**:
-   - The user issues a voice command to capture an image through the Ray-Ban Meta Glasses.
-   
-2. **Image Transmission**:
-   - The glasses send the image to the server for processing.
+## **How to Run**
 
-3. **Custom Analysis**:
-   - Our tailored GPT model analyzes the image, providing detailed insights, such as identifying objects, reading text, or describing scenes.
+### **1. Setup Backend**
 
-4. **Auditory Feedback**:
-   - The analysis is converted into audio and transmitted back to the glasses, allowing the user to hear the description.
+- Install dependencies: `pip install flask fastapi opencv-python pytesseract tensorflow`
+- Run the backend server: `python server.py`
 
----
+### **2. Connect to Glasses**
 
-## Vision and Impact
+- Enable live streaming on Ray-Ban Meta glasses.
+- Authenticate with the WhatsApp/Messenger API.
 
-This project aims to transform the lives of the blind and visually impaired by offering a revolutionary tool for environmental interaction. By combining AI and wearable tech, we strive to bridge the gap between accessibility and independence.
+### **3. User Interaction**
 
----
+- Start navigation mode.
+- The system provides real-time feedback using spatial audio.
 
-## Team
+## **Contributors**
 
-- **Rami Daood**
-- **Mariana Dakwar**
+- **Mariana Dakwar** ([marianadakwar@gmail.com](mailto\:marianadakwar@gmail.com))
+- **Rami Daood** ([daoodrami52@gmail.com](mailto\:daoodrami52@gmail.com))
 
----
+## **License**
 
-## Installation and Usage
+This project is intended for academic purposes and is open for accessibility-related research.
 
-_Coming Soon_: Detailed installation and usage instructions will be provided in future updates.
-
----
-
-## Contributing
-
-We welcome contributions! If you have ideas or improvements for this project, feel free to fork the repository and submit a pull request.
-
----
-
-
-## Contact
-
-For any questions or suggestions, please reach out to us:
-
-- **Email**: visionaryproject@support.com
+For additional questions, please contact the contributors or the industry supervisor **Shiri Hochman** at **[shiri@migdalor.org.il](mailto\:shiri@migdalor.org.il)**.
 
