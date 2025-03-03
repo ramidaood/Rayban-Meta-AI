@@ -67,5 +67,4 @@ The system is designed to be intuitive, requiring no prior technical knowledge f
 
 ---  
 
-This proposal outlines a structured approach to developing an AI-driven navigation assistant using Ray-Ban Meta glasses, integrating advanced AI, computer vision, and spatial audio technology to support visually impaired individuals.
 
