@@ -1,86 +1,113 @@
 import cv2
+import torch
 import numpy as np
 import mss
-import time
-import torch
 import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+# Load the default YOLOv5s model for testing
+model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+
+# For testing, use all classes
+FOCUS_CLASSES = model.names  # Show all classes
 
 def main():
-    # Suppress FutureWarnings from YOLOv5
-    warnings.filterwarnings("ignore", category=FutureWarning)
-
-    # Load the YOLOv5 small model from PyTorch Hub
-    # This downloads the model on first run; later runs will use the cache.
-    model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
-    model.conf = 0.5  # Confidence threshold
-
-    # Define obstacle classes (using COCO classes as an example)
-    obstacle_classes = {'person', 'bicycle', 'car', 'bus', 'motorbike', 'chair', 'diningtable', 'sofa'}
-
-    # Use mss to manage screen captures
     with mss.mss() as sct:
-        # Check that we have at least two physical monitors:
-        # sct.monitors[0] = virtual full screen, [1] = primary, [2] = second, etc.
-        if len(sct.monitors) < 3:
-            print("No second monitor found. Make sure two monitors are connected.")
-            return
+        screen = sct.monitors[1]
+        screen_width = screen['width']
+        screen_height = screen['height']
 
-        # main_monitor is typically sct.monitors[1] (primary display)
-        main_monitor = sct.monitors[1]
-
-        # second_monitor is sct.monitors[2]
-        second_monitor = sct.monitors[2]
-        # second_monitor might look like {'left': 1920, 'top': 0, 'width': 1920, 'height': 1080} on a side-by-side setup
-
-        # Extract the top-left coordinates of the second monitor
-        second_left = second_monitor['left']
-        second_top = second_monitor['top']
-
-        # Create a single OpenCV window and place it on the second monitor
-        window_name = "YOLOv5 Detection (Second Monitor)"
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-
-        # Example window size (adjust as needed)
-        window_width, window_height = 800, 600
-        cv2.resizeWindow(window_name, window_width, window_height)
-        # Move the window to the second monitor’s coordinate space
-        cv2.moveWindow(window_name, second_left, second_top)
+        # Define right third of screen
+        monitor = {
+            "top": 0,
+            "left": int(screen_width * 2 / 3),
+            "width": int(screen_width / 3),
+            "height": screen_height
+        }
 
         while True:
-            # Capture from the main monitor
-            sct_img = sct.grab(main_monitor)
-            frame = np.array(sct_img)
-            # Convert from BGRA (mss format) to BGR (OpenCV format)
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+            # Grab frame from right third
+            frame = np.array(sct.grab(monitor))[:, :, :3]
 
-            # Run YOLOv5 detection on the captured frame
+            # Run detection
             results = model(frame)
 
-            # Retrieve detections as a Pandas DataFrame
-            detections = results.pandas().xyxy[0]
+            # Debug: print detection tensor shape
+            print("Detections tensor shape:", results.xyxy[0].shape)
 
-            # Filter detections to only obstacle classes
-            obstacles = detections[detections['name'].isin(obstacle_classes)]
-            if obstacles.empty:
-                print("No obstacles detected.")
-            else:
-                print("Obstacles detected:")
-                print(obstacles[['name', 'confidence']])
+            # Create a clean output frame (copy of original)
+            output = frame.copy()
+            
+            # Draw center points and print object info
+            focus_detections = []
+            for *box, conf, cls in results.xyxy[0]:
+                if conf >= 0.1:  # Confidence threshold
+                    # Get coordinates
+                    x1, y1, x2, y2 = map(int, box)
+                    
+                    # Calculate center point with higher precision
+                    center_x = (x1 + x2) / 2
+                    center_y = (y1 + y2) / 2
+                    
+                    # Draw larger center point (red circle)
+                    cv2.circle(output, (int(center_x), int(center_y)), 10, (0, 0, 255), -1)  # Increased radius to 10
+                    
+                    # Draw larger crosshairs for better precision
+                    crosshair_size = 20  # Increased crosshair size
+                    cv2.line(output, 
+                            (int(center_x - crosshair_size), int(center_y)),
+                            (int(center_x + crosshair_size), int(center_y)),
+                            (0, 0, 255), 2)
+                    cv2.line(output, 
+                            (int(center_x), int(center_y - crosshair_size)),
+                            (int(center_x), int(center_y + crosshair_size)),
+                            (0, 0, 255), 2)
+                    
+                    # Get class name
+                    class_name = model.names[int(cls)]
+                    
+                    # Create label with precise coordinates
+                    label = f"{class_name} ({center_x:.1f}, {center_y:.1f})"
+                    
+                    # Draw larger text with background for better visibility
+                    font_scale = 1.0  # Increased font size
+                    font_thickness = 2  # Increased thickness
+                    (text_width, text_height), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)
+                    
+                    # Draw text background
+                    cv2.rectangle(output, 
+                                (x1, y1 - text_height - 10),
+                                (x1 + text_width + 10, y1),
+                                (0, 0, 0),
+                                -1)
+                    
+                    # Draw text
+                    cv2.putText(output, label, (x1 + 5, y1 - 5),
+                              cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), font_thickness)
+                    
+                    # Print detection info with precise coordinates
+                    print(f"Detected {class_name} at center position: ({center_x:.1f}, {center_y:.1f}) pixels")
+                    
+                    # Store detection info for logging
+                    detection_info = {
+                        'class': class_name,
+                        'confidence': float(conf),
+                        'center_x': float(center_x),
+                        'center_y': float(center_y)
+                    }
+                    focus_detections.append(detection_info)
+            # Log detections
+            if focus_detections:
+                print("✅ Detected:", ", ".join(f"{d['class']} ({d['confidence']:.2f}) at center: ({d['center_x']:.1f}, {d['center_y']:.1f})" for d in focus_detections))
 
-            # Render the detection results on the image
-            annotated_frame = results.render()[0]
+            # Show result
+            output = cv2.cvtColor(output, cv2.COLOR_RGB2BGR)
+            cv2.imshow("Focused Detection - Right Third", output)
 
-            # Display the annotated frame on the second monitor
-            cv2.imshow(window_name, annotated_frame)
-
-            # Break the loop on 'q' press
+            # Exit on Q
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
-            # Optional: Sleep to reduce CPU usage
-            time.sleep(0.01)
-
-        # Clean up
         cv2.destroyAllWindows()
 
 if __name__ == "__main__":
