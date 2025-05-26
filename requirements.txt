@@ -1,0 +1,16 @@
+numpy<2.0.0  # Downgrade numpy to avoid compatibility issues
+opencv-python>=4.8.0  # for cv2
+torch>=2.0.0  # for PyTorch
+mss>=9.0.1  # for screen capture
+pygame>=2.5.0  # for audio
+ultralytics>=8.0.0  # for YOLOv5
+setuptools>=65.5.1  # for pkg_resources
+seaborn>=0.12.0  # Required by YOLOv5
+matplotlib>=3.3.0  # Required by YOLOv5
+pandas>=1.1.4  # Required by YOLOv5
+torchvision>=0.9.0  # Required by YOLOv5
+Pillow>=7.1.2  # Required by YOLOv5
+PyYAML>=5.3.1  # Required by YOLOv5
+requests>=2.23.0  # Required by YOLOv5
+scipy>=1.4.1  # Required by YOLOv5
+tqdm>=4.64.0  # Required by YOLOv5 
