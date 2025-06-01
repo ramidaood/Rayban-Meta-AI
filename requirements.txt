@@ -13,4 +13,5 @@ Pillow>=7.1.2  # Required by YOLOv5
 PyYAML>=5.3.1  # Required by YOLOv5
 requests>=2.23.0  # Required by YOLOv5
 scipy>=1.4.1  # Required by YOLOv5
-tqdm>=4.64.0  # Required by YOLOv5 
+tqdm>=4.64.0  # Required by YOLOv5
+websockets>=12.0  # for WebSocket server 
