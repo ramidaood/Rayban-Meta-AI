@@ -5,16 +5,7 @@ import mss
 import warnings
 import os
 import pygame
-import asyncio
-import websockets
-import json
-import threading
-from queue import Queue
 warnings.filterwarnings("ignore", category=FutureWarning)
-
-# WebSocket Server Configuration
-WS_HOST = "192.168.68.57"  # WebSocket server IP address
-WS_PORT = 4000            # WebSocket server port
 
 # Load the default YOLov5s model for testing
 model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
@@ -22,51 +13,10 @@ model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
 # For testing, use all classes
 FOCUS_CLASSES = model.names  # Show all classes
 
-# Global queue for direction updates
-direction_queue = Queue()
-
-# Store active WebSocket connections
-active_connections = set()
-
-async def websocket_handler(websocket):
-    """Handle WebSocket connections and send direction updates"""
-    print("Client connected")
-    active_connections.add(websocket)
-    try:
-        # Send initial connection message
-        await websocket.send(json.dumps({"direction": "Waiting for direction..."}))
-        
-        while True:
-            # Get the latest direction from the queue
-            if not direction_queue.empty():
-                direction = direction_queue.get()
-                message = json.dumps({"direction": direction})
-                await websocket.send(message)
-                print(f"Sent direction: {direction}")
-            await asyncio.sleep(0.1)  # Small delay to prevent CPU overuse
-    except websockets.exceptions.ConnectionClosed:
-        print("Client disconnected")
-    finally:
-        active_connections.remove(websocket)
-
-async def start_websocket_server():
-    """Start the WebSocket server"""
-    async with websockets.serve(
-        websocket_handler,
-        WS_HOST,  # Using configuration variable
-        WS_PORT,  # Using configuration variable
-        ping_interval=20,  # Send ping every 20 seconds
-        ping_timeout=10,   # Wait 10 seconds for pong response
-        close_timeout=10   # Wait 10 seconds for close handshake
-    ) as server:
-        print(f"WebSocket server is running on ws://{WS_HOST}:{WS_PORT}")
-        await asyncio.Future()  # run forever
-
-def run_websocket_server():
-    """Run the WebSocket server in a separate thread"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(start_websocket_server())
+CENTER_ZONE_START_X = 398
+CENTER_ZONE_END_X = 796
+ALERT_ZONE_TOP_Y = 1492
+ALERT_ZONE_BOTTOM_Y = 2240
 
 def initialize_audio():
     """Initialize pygame and audio system"""
@@ -109,15 +59,20 @@ def play_sound(sound, channel, side):
         if sound:
             # Stop any currently playing sounds
             pygame.mixer.stop()
-            
-            if side == 'left':
-                # Full volume on left, no volume on right
-                channel.set_volume(1.0, 0.0)
-            else:  # right
-                # No volume on left, full volume on right
-                channel.set_volume(0.0, 1.0)
-            channel.play(sound)
-            print(f"Playing sound on {side} side")
+            print(f"[DEBUG] About to play sound on side: {side}")
+            # Print channel state and volume
+            print(f"[DEBUG] Channel busy before play: {channel.get_busy()}")
+            print(f"[DEBUG] Channel volume before play: {channel.get_volume()}")
+            # For debugging, use default channel
+            sound.play()
+            print(f"[DEBUG] Used sound.play() (default channel)")
+            # If you want to test the original code, comment out the above and uncomment below:
+            # if side == 'left':
+            #     channel.set_volume(1.0, 0.0)
+            # else:  # right
+            #     channel.set_volume(0.0, 1.0)
+            # channel.play(sound)
+            # print(f"Playing sound on {side} side")
         else:
             print("No sound loaded to play")
     except Exception as e:
@@ -129,43 +84,26 @@ def analyze_objects(objects, capture_width, capture_height):
         print("No objects detected")
         return None, None
 
-    # Calculate center zone boundaries to match visual green lines
-    center_zone_width = capture_width * 0.4  # 40% of capture width
-    center_point = capture_width / 2  # Center of capture area
-    center_start = center_point - (center_zone_width / 2)
-    center_end = center_point + (center_zone_width / 2)
-    center_zone_mid_y = capture_height / 2  # Middle of capture area
-    
-    # Calculate alert zone threshold to cover entire bottom half
-    alert_threshold = capture_height  # Use full height as threshold to ensure entire bottom half is covered
-
-    print(f"Capture dimensions: {capture_width}x{capture_height}")
-    print(f"Center point: {center_point:.0f}")
-    print(f"Center zone: {center_start:.0f} to {center_end:.0f}")
-    print(f"Alert threshold: {alert_threshold:.0f} pixels")
-
-    zone_counts = {
-        "left": [],
-        "center": [],
-        "right": []
-    }
+    # Use the same hard-coded values for detection, doubled
+    center_zone_start_x = 199 * 2
+    center_zone_end_x = 398 * 2
+    alert_zone_top_y = 746 * 2
+    alert_zone_bottom_y = 1120 * 2
+    zone_counts = {"left": [], "center": [], "right": []}
 
     # Debug: Print all detected objects
     print("\nAll detected objects:")
     for obj in objects:
-        print(f"Object: {obj['class']} at x={obj['center_x']}, pixel_distance={obj['pixel_distance']:.0f}px, normalized={obj['distance']:.2f}, confidence={obj['confidence']}, in_alert_zone={obj['in_alert_zone']}")
+        print(f"Object: {obj['class']} at x={obj['center_x']}, y={obj['center_y']}, pixel_distance={obj['pixel_distance']:.0f}px, normalized={obj['distance']:.2f}, confidence={obj['confidence']}")
 
     for obj in objects:
         x = obj['center_x']
         y = obj['center_y']
-        # Check if object is in alert zone (bottom half of center zone)
-        obj['in_alert_zone'] = (center_start <= x <= center_end and y >= center_zone_mid_y)
-        
-        # Check if object is in center zone (between green lines) and in bottom half
-        if center_start <= x <= center_end and y >= center_zone_mid_y:
-            zone_counts["center"].append(obj)
-            print(f"Object in center zone: {obj['class']} at x={x}, y={y}")
-        elif x < center_start:
+        obj['in_alert_zone'] = (center_zone_start_x <= x <= center_zone_end_x and alert_zone_top_y <= y <= alert_zone_bottom_y)
+        if center_zone_start_x <= x <= center_zone_end_x:
+            if obj['in_alert_zone']:
+                zone_counts["center"].append(obj)
+        elif x < center_zone_start_x:
             zone_counts["left"].append(obj)
         else:
             zone_counts["right"].append(obj)
@@ -190,7 +128,7 @@ def analyze_objects(objects, capture_width, capture_height):
             print(f"Position: x={center_object['center_x']}, y={center_object['center_y']}")
             
             # If the center object is close enough and has good confidence
-            if center_object['confidence'] > 0.5:  # Only check confidence since we're using the full bottom half
+            if center_object['confidence'] > 0.5:
                 # Check closest objects on each side
                 left_distance = closest_left['pixel_distance'] if closest_left else float('inf')
                 right_distance = closest_right['pixel_distance'] if closest_right else float('inf')
@@ -204,13 +142,9 @@ def analyze_objects(objects, capture_width, capture_height):
                 # Determine which side has more space (further closest object)
                 if left_distance > right_distance:
                     print("Left side has more space, suggesting move LEFT")
-                    # Add direction to queue for WebSocket
-                    direction_queue.put("left")
                     return "left", center_object
                 else:
                     print("Right side has more space, suggesting move RIGHT")
-                    # Add direction to queue for WebSocket
-                    direction_queue.put("right")
                     return "right", center_object
             else:
                 print("\nCenter object rejected because:")
@@ -222,11 +156,11 @@ def analyze_objects(objects, capture_width, capture_height):
     
     return None, None
 
-def main():
-    # Start WebSocket server in a separate thread
-    websocket_thread = threading.Thread(target=run_websocket_server, daemon=True)
-    websocket_thread.start()
+def write_direction(direction):
+    with open("last_direction.txt", "w") as f:
+        f.write(direction)
 
+def main():
     # Initialize audio system
     if not initialize_audio():
         print("Failed to initialize audio system")
@@ -247,17 +181,23 @@ def main():
         print("Failed to load sound file")
         return
 
+    # Test sound playback immediately after loading
+    print("Testing sound playback...")
+    sound.play()
+    pygame.time.wait(1000)  # Wait 1 second to hear the sound
+    print("Sound test complete.")
+
     with mss.mss() as sct:
         # Get the primary monitor (usually monitor[0])
         screen = sct.monitors[0]  # Changed from monitor[1] to monitor[0] for primary display
-        screen_width = screen['width']
-        screen_height = screen['height']
+        screen_width = 1792  # Fixed width for user's display
+        screen_height = 1120  # Fixed height for user's display
 
         # Calculate relative dimensions
-        capture_width = int(screen_width / 3)  # One third of screen width
-        capture_height = int(screen_height / 2)  # Half of screen height
+        capture_width = int(screen_width / 3)  # One third of screen width (597 pixels)
+        capture_height = screen_height  # Full height
         capture_left = int(screen_width * 2 / 3)  # Start from right third
-        capture_top = int(screen_height / 2)  # Start from middle of screen
+        capture_top = 0  # Start from top of screen
 
         # Define capture area with relative dimensions
         monitor = {
@@ -270,20 +210,30 @@ def main():
         print(f"Screen dimensions: {screen_width}x{screen_height}")
         print(f"Capture area: {monitor}")
 
-        # Calculate center zone reference point relative to capture area
-        center_zone_width = capture_width * 0.4  # 40% of capture width
+        # Hard-coded values for 1792x1120 screen and right third capture area, doubled
+        center_zone_start_x = 199 * 2
+        center_zone_end_x = 398 * 2
+        alert_zone_top_y = 746 * 2
+        alert_zone_bottom_y = 1120 * 2
+        third_w = 199 * 2
+        third_h = 373 * 2
+
+        print(f"[HARDCODED-DOUBLED] Center zone: x={center_zone_start_x} to {center_zone_end_x}")
+        print(f"[HARDCODED-DOUBLED] Alert zone: x={center_zone_start_x} to {center_zone_end_x}, y={alert_zone_top_y} to {alert_zone_bottom_y}")
+
+        # Calculate alert zone (bottom third of capture area)
+        alert_zone_height = capture_height / 3
+        alert_zone_top = capture_height - alert_zone_height
+
+        # Calculate center zone (centered in the capture area)
+        center_zone_width = capture_width / 2  # Half of capture width
         center_point = capture_width / 2  # Center of capture area
-        center_zone_x = center_point
-        center_zone_y = capture_height  # Bottom of the capture area
+        center_zone_start = center_point - (center_zone_width / 2)  # Start at quarter of capture width
+        center_zone_end = center_point + (center_zone_width / 2)  # End at three quarters of capture width
+        center_zone_mid_y = alert_zone_top + (alert_zone_height / 2)  # Middle of alert zone
 
-        # Calculate center zone boundaries
-        center_zone_start = center_point - (center_zone_width / 2)
-        center_zone_end = center_point + (center_zone_width / 2)
-        center_zone_mid_y = capture_height / 2  # Middle of the capture area
-
-        print(f"Capture center: ({capture_width/2}, {capture_height/2})")
-        print(f"Center zone reference: ({center_zone_x}, {center_zone_y})")
-        print(f"Center zone boundaries: x={center_zone_start} to {center_zone_end}, y=0 to {center_zone_mid_y}")
+        print(f"Alert zone: top={alert_zone_top}, height={alert_zone_height}")
+        print(f"Center zone: x={center_zone_start} to {center_zone_end}, y={alert_zone_top} to {capture_height}")
 
         # Add a longer cooldown for sound
         last_sound_time = 0
@@ -314,8 +264,8 @@ def main():
                     center_y = (y1 + y2) / 2
                     
                     # Calculate pixel distance from center zone reference point
-                    dx = center_x - center_zone_x
-                    dy = center_y - center_zone_y
+                    dx = center_x - (capture_width/2)
+                    dy = center_y - center_zone_mid_y
                     pixel_distance = (dx**2 + dy**2)**0.5
                     
                     # Normalize distance to 0-1 range using capture area diagonal as max
@@ -332,9 +282,8 @@ def main():
                         'center_x': float(center_x),
                         'center_y': float(center_y),
                         'distance': normalized_distance,
-                        'pixel_distance': pixel_distance,  # Store raw pixel distance for debugging
-                        'in_alert_zone': (center_zone_start <= center_x <= center_zone_end and 
-                                        center_y >= center_zone_mid_y)  # Flag for objects in alert zone
+                        'pixel_distance': pixel_distance,
+                        'in_alert_zone': (center_y >= alert_zone_top)
                     }
                     detected_objects.append(object_info)
                     
@@ -376,24 +325,35 @@ def main():
 
             # Draw center zone reference point
             cv2.circle(output, 
-                      (int(center_zone_x), int(center_zone_y)), 
+                      (int(capture_width/2), int(center_zone_mid_y)), 
                       10, (0, 255, 0), -1)  # Green dot for center zone reference
 
-            # Draw center zone boundaries
-            cv2.line(output, 
-                    (int(center_zone_start), 0),
-                    (int(center_zone_start), capture_height),
-                    (0, 255, 0), 2)
-            cv2.line(output, 
-                    (int(center_zone_end), 0),
-                    (int(center_zone_end), capture_height),
-                    (0, 255, 0), 2)
-            
-            # Draw horizontal line for bottom half
+            # Draw alert zone boundary (top of alert zone)
             cv2.line(output,
-                    (int(center_zone_start), int(center_zone_mid_y)),
-                    (int(center_zone_end), int(center_zone_mid_y)),
+                    (0, int(alert_zone_top)),
+                    (capture_width, int(alert_zone_top)),
                     (0, 255, 0), 2)
+
+            # Draw center zone boundaries (vertical lines only in alert zone)
+            cv2.line(output, 
+                    (int(center_zone_start_x), int(alert_zone_top)),
+                    (int(center_zone_start_x), capture_height),
+                    (0, 255, 0), 2)
+            cv2.line(output, 
+                    (int(center_zone_end_x), int(alert_zone_top)),
+                    (int(center_zone_end_x), capture_height),
+                    (0, 255, 0), 2)
+
+            # Draw vertical thirds (for reference)
+            cv2.line(output, (third_w, 0), (third_w, capture_height), (255, 255, 0), 1)
+            cv2.line(output, (2*third_w, 0), (2*third_w, capture_height), (255, 255, 0), 1)
+            # Draw horizontal thirds (for reference)
+            cv2.line(output, (0, third_h), (capture_width, third_h), (255, 255, 0), 1)
+            cv2.line(output, (0, 2*third_h), (capture_width, 2*third_h), (255, 255, 0), 1)
+            # Draw center zone (middle vertical third)
+            cv2.rectangle(output, (center_zone_start_x, 0), (center_zone_end_x, capture_height), (0, 255, 0), 2)
+            # Draw alert zone (intersection)
+            cv2.rectangle(output, (center_zone_start_x, alert_zone_top_y), (center_zone_end_x, alert_zone_bottom_y), (0, 0, 255), 2)
 
             # Analyze objects and determine alert
             direction_to_play, closest_object = analyze_objects(detected_objects, capture_width, capture_height)
@@ -404,6 +364,7 @@ def main():
             
             # Only play sound if cooldown has passed
             if time_since_last_sound > sound_cooldown and direction_to_play:
+                write_direction(direction_to_play)
                 print(f"Playing sound in direction: {direction_to_play}")
                 if direction_to_play == "left":
                     play_sound(sound, left_channel, "left")
@@ -413,6 +374,10 @@ def main():
                 last_direction = direction_to_play
             elif direction_to_play:
                 print(f"Alert suppressed - {sound_cooldown - time_since_last_sound:.1f}s remaining on cooldown")
+
+            # Debug: Print the shape of the captured frame and output image
+            print("Frame shape:", frame.shape)
+            print("Output shape:", output.shape)
 
             # Show result
             output = cv2.cvtColor(output, cv2.COLOR_RGB2BGR)
