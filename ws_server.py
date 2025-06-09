@@ -4,10 +4,10 @@ import json
 import os
 
 DIRECTION_FILE = "last_direction.txt"
-WS_HOST = "0.0.0.0"
-WS_PORT = 4000
+WS_HOST = "172.20.10.10"
+WS_PORT = 4040
 
-async def direction_broadcaster(websocket, path):
+async def direction_broadcaster(websocket):
     print("Client connected")
     last_sent = None
     try:
