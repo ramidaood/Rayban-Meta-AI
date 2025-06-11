@@ -5,7 +5,64 @@ import mss
 import warnings
 import os
 import pygame
+import paho.mqtt.client as mqtt
+import json
+from datetime import datetime
 warnings.filterwarnings("ignore", category=FutureWarning)
+
+# MQTT Configuration
+MQTT_BROKER = "23a63ad1f9db4bd68c6a1dd8b8afba7.s1.eu.hivemq.cloud"
+MQTT_PORT = 8884
+
+# Server (Mac) credentials
+MQTT_SERVER_USERNAME = "server"  # Your current server username
+MQTT_SERVER_PASSWORD = "Italy2001"  # Your current server password
+
+
+
+# Topics
+MQTT_TOPIC_COMMANDS = "commands/to-mac"
+MQTT_TOPIC_DIRECTIONS = "directions/from-mac"
+
+# MQTT Client setup
+mqtt_client = mqtt.Client()
+mqtt_client.username_pw_set(MQTT_SERVER_USERNAME, MQTT_SERVER_PASSWORD)  # Using server credentials for the Mac
+
+def on_connect(client, userdata, flags, rc):
+    """Callback for when the client connects to the broker"""
+    if rc == 0:
+        print("Connected to HiveMQ Cloud!")
+        client.subscribe(MQTT_TOPIC_COMMANDS)
+        print(f"Subscribed to {MQTT_TOPIC_COMMANDS}")
+    else:
+        print(f"Failed to connect, return code {rc}")
+
+def on_message(client, userdata, msg):
+    """Callback for when a message is received"""
+    try:
+        payload = msg.payload.decode()
+        print(f"Received command: {payload}")
+        # Handle any commands from the app here
+    except Exception as e:
+        print(f"Error processing message: {e}")
+
+def on_disconnect(client, userdata, rc):
+    """Callback for when the client disconnects"""
+    print(f"Disconnected with result code: {rc}")
+    # Attempt to reconnect
+    client.reconnect()
+
+# Set up MQTT callbacks
+mqtt_client.on_connect = on_connect
+mqtt_client.on_message = on_message
+mqtt_client.on_disconnect = on_disconnect
+
+# Connect to MQTT broker
+try:
+    mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
+    mqtt_client.loop_start()
+except Exception as e:
+    print(f"Failed to connect to MQTT broker: {e}")
 
 # Load the default YOLov5s model for testing
 model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
@@ -157,8 +214,20 @@ def analyze_objects(objects, capture_width, capture_height):
     return None, None
 
 def write_direction(direction):
+    """Write direction to file and publish to MQTT"""
     with open("last_direction.txt", "w") as f:
         f.write(direction)
+    
+    # Publish direction to MQTT
+    try:
+        payload = json.dumps({
+            "direction": direction,
+            "timestamp": datetime.now().isoformat()
+        })
+        mqtt_client.publish(MQTT_TOPIC_DIRECTIONS, payload)
+        print(f"Published direction to MQTT: {direction}")
+    except Exception as e:
+        print(f"Error publishing to MQTT: {e}")
 
 def main():
     # Initialize audio system
@@ -389,6 +458,8 @@ def main():
 
         cv2.destroyAllWindows()
         pygame.quit()
+        mqtt_client.loop_stop()
+        mqtt_client.disconnect()
 
 if __name__ == "__main__":
     main()
