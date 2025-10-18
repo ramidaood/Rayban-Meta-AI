@@ -141,22 +141,26 @@ def analyze_objects(objects, capture_width, capture_height):
         print("No objects detected")
         return None, None
 
-    # Use the same hard-coded values for detection, doubled
-    center_zone_start_x = 199 * 2
-    center_zone_end_x = 398 * 2
-    alert_zone_top_y = 746 * 2
-    alert_zone_bottom_y = 1120 * 2
+    # Calculate zones relative to the right third capture area
+    # Center zone: middle third of the right third (so it's centered in the capture area)
+    center_zone_start_x = capture_width / 3  # Start at 1/3 of capture width
+    center_zone_end_x = 2 * capture_width / 3  # End at 2/3 of capture width
+    
+    # Alert zone: bottom third of the capture area
+    alert_zone_top_y = 2 * capture_height / 3  # Start at 2/3 of capture height
+    alert_zone_bottom_y = capture_height  # End at bottom of capture area
+    
     zone_counts = {"left": [], "center": [], "right": []}
 
     # Debug: Print all detected objects
     print("\nAll detected objects:")
     for obj in objects:
-        print(f"Object: {obj['class']} at x={obj['center_x']}, y={obj['center_y']}, pixel_distance={obj['pixel_distance']:.0f}px, normalized={obj['distance']:.2f}, confidence={obj['confidence']}")
+        print(f"Object: {obj['class']} at x={obj['center_x']}, y={obj['center_y']}, pixel_distance={obj['pixel_distance']:.0f}px, normalized={obj['distance']:.2f}, confidence={obj['confidence']}, in_alert_zone={obj['in_alert_zone']}")
 
     for obj in objects:
         x = obj['center_x']
         y = obj['center_y']
-        obj['in_alert_zone'] = (center_zone_start_x <= x <= center_zone_end_x and alert_zone_top_y <= y <= alert_zone_bottom_y)
+        # Use the pre-calculated alert zone status from bounding box intersection
         if center_zone_start_x <= x <= center_zone_end_x:
             if obj['in_alert_zone']:
                 zone_counts["center"].append(obj)
@@ -183,6 +187,7 @@ def analyze_objects(objects, capture_width, capture_height):
             print(f"Normalized distance: {center_object['distance']:.2f}")
             print(f"Confidence: {center_object['confidence']}")
             print(f"Position: x={center_object['center_x']}, y={center_object['center_y']}")
+            print(f"Bounding box: {center_object['box_coords']}")
             
             # If the center object is close enough and has good confidence
             if center_object['confidence'] > 0.5:
@@ -279,30 +284,26 @@ def main():
         print(f"Screen dimensions: {screen_width}x{screen_height}")
         print(f"Capture area: {monitor}")
 
-        # Hard-coded values for 1792x1120 screen and right third capture area, doubled
-        center_zone_start_x = 199 * 2
-        center_zone_end_x = 398 * 2
-        alert_zone_top_y = 746 * 2
-        alert_zone_bottom_y = 1120 * 2
-        third_w = 199 * 2
-        third_h = 373 * 2
+        # Calculate zones relative to the right third capture area
+        # Center zone: middle third of the right third (centered in capture area)
+        center_zone_start_x = capture_width / 3  # Start at 1/3 of capture width
+        center_zone_end_x = 2 * capture_width / 3  # End at 2/3 of capture width
+        
+        # Alert zone: bottom third of the capture area
+        alert_zone_top_y = 2 * capture_height / 3  # Start at 2/3 of capture height
+        alert_zone_bottom_y = capture_height  # End at bottom of capture area
+        
+        # Calculate reference points for distance calculations
+        center_zone_mid_x = capture_width / 2  # Center of capture area
+        center_zone_mid_y = alert_zone_top_y + (capture_height - alert_zone_top_y) / 2  # Middle of alert zone
+        
+        # Calculate thirds for visualization
+        third_w = capture_width / 3
+        third_h = capture_height / 3
 
-        print(f"[HARDCODED-DOUBLED] Center zone: x={center_zone_start_x} to {center_zone_end_x}")
-        print(f"[HARDCODED-DOUBLED] Alert zone: x={center_zone_start_x} to {center_zone_end_x}, y={alert_zone_top_y} to {alert_zone_bottom_y}")
-
-        # Calculate alert zone (bottom third of capture area)
-        alert_zone_height = capture_height / 3
-        alert_zone_top = capture_height - alert_zone_height
-
-        # Calculate center zone (centered in the capture area)
-        center_zone_width = capture_width / 2  # Half of capture width
-        center_point = capture_width / 2  # Center of capture area
-        center_zone_start = center_point - (center_zone_width / 2)  # Start at quarter of capture width
-        center_zone_end = center_point + (center_zone_width / 2)  # End at three quarters of capture width
-        center_zone_mid_y = alert_zone_top + (alert_zone_height / 2)  # Middle of alert zone
-
-        print(f"Alert zone: top={alert_zone_top}, height={alert_zone_height}")
-        print(f"Center zone: x={center_zone_start} to {center_zone_end}, y={alert_zone_top} to {capture_height}")
+        print(f"Center zone: x={center_zone_start_x:.0f} to {center_zone_end_x:.0f}")
+        print(f"Alert zone: x={center_zone_start_x:.0f} to {center_zone_end_x:.0f}, y={alert_zone_top_y:.0f} to {alert_zone_bottom_y:.0f}")
+        print(f"Reference point: ({center_zone_mid_x:.0f}, {center_zone_mid_y:.0f})")
 
         # Add a longer cooldown for sound
         last_sound_time = 0
@@ -333,7 +334,7 @@ def main():
                     center_y = (y1 + y2) / 2
                     
                     # Calculate pixel distance from center zone reference point
-                    dx = center_x - (capture_width/2)
+                    dx = center_x - center_zone_mid_x
                     dy = center_y - center_zone_mid_y
                     pixel_distance = (dx**2 + dy**2)**0.5
                     
@@ -344,6 +345,13 @@ def main():
                     # Get class name
                     class_name = model.names[int(cls)]
                     
+                    # Check if bounding box intersects with alert zone
+                    # Alert zone: center_zone_start_x to center_zone_end_x, alert_zone_top_y to alert_zone_bottom_y
+                    box_in_alert_zone = (
+                        x1 < center_zone_end_x and x2 > center_zone_start_x and  # Horizontal overlap
+                        y1 < alert_zone_bottom_y and y2 > alert_zone_top_y       # Vertical overlap
+                    )
+                    
                     # Store object info
                     object_info = {
                         'class': class_name,
@@ -352,31 +360,29 @@ def main():
                         'center_y': float(center_y),
                         'distance': normalized_distance,
                         'pixel_distance': pixel_distance,
-                        'in_alert_zone': (center_y >= alert_zone_top)
+                        'in_alert_zone': box_in_alert_zone,
+                        'box_coords': (x1, y1, x2, y2)  # Store bounding box coordinates
                     }
                     detected_objects.append(object_info)
                     
-                    # Draw larger center point (red circle)
-                    cv2.circle(output, (int(center_x), int(center_y)), 10, (0, 0, 255), -1)
+                    # Draw larger bounding box with thicker lines
+                    box_thickness = max(3, int(capture_width / 200))  # Thicker lines for better visibility
                     
-                    # Draw larger crosshairs for better precision
-                    crosshair_size = int(capture_width * 0.05)  # 5% of capture width
-                    cv2.line(output, 
-                            (int(center_x - crosshair_size), int(center_y)),
-                            (int(center_x + crosshair_size), int(center_y)),
-                            (0, 0, 255), 2)
-                    cv2.line(output, 
-                            (int(center_x), int(center_y - crosshair_size)),
-                            (int(center_x), int(center_y + crosshair_size)),
-                            (0, 0, 255), 2)
+                    # Color the bounding box based on alert zone status
+                    if box_in_alert_zone:
+                        box_color = (0, 0, 255)  # Red for objects in alert zone
+                    else:
+                        box_color = (0, 255, 0)  # Green for objects outside alert zone
+                    
+                    cv2.rectangle(output, (x1, y1), (x2, y2), box_color, box_thickness)
                     
                     # Create label with distance info
                     distance_text = f"{pixel_distance:.0f}px"  # Show pixel distance
                     label = f"{class_name} ({distance_text})"
                     
                     # Draw larger text with background for better visibility
-                    font_scale = capture_width / 1000  # Scale font size with capture width
-                    font_thickness = max(1, int(capture_width / 500))  # Scale thickness with capture width
+                    font_scale = capture_width / 800  # Scale font size with capture width (increased from 1000)
+                    font_thickness = max(2, int(capture_width / 400))  # Scale thickness with capture width (increased from 500)
                     (text_width, text_height), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)
                     
                     # Draw text background
@@ -394,35 +400,35 @@ def main():
 
             # Draw center zone reference point
             cv2.circle(output, 
-                      (int(capture_width/2), int(center_zone_mid_y)), 
+                      (int(center_zone_mid_x), int(center_zone_mid_y)), 
                       10, (0, 255, 0), -1)  # Green dot for center zone reference
 
             # Draw alert zone boundary (top of alert zone)
             cv2.line(output,
-                    (0, int(alert_zone_top)),
-                    (capture_width, int(alert_zone_top)),
+                    (0, int(alert_zone_top_y)),
+                    (capture_width, int(alert_zone_top_y)),
                     (0, 255, 0), 2)
 
             # Draw center zone boundaries (vertical lines only in alert zone)
             cv2.line(output, 
-                    (int(center_zone_start_x), int(alert_zone_top)),
+                    (int(center_zone_start_x), int(alert_zone_top_y)),
                     (int(center_zone_start_x), capture_height),
                     (0, 255, 0), 2)
             cv2.line(output, 
-                    (int(center_zone_end_x), int(alert_zone_top)),
+                    (int(center_zone_end_x), int(alert_zone_top_y)),
                     (int(center_zone_end_x), capture_height),
                     (0, 255, 0), 2)
 
             # Draw vertical thirds (for reference)
-            cv2.line(output, (third_w, 0), (third_w, capture_height), (255, 255, 0), 1)
-            cv2.line(output, (2*third_w, 0), (2*third_w, capture_height), (255, 255, 0), 1)
+            cv2.line(output, (int(third_w), 0), (int(third_w), capture_height), (255, 255, 0), 1)
+            cv2.line(output, (int(2*third_w), 0), (int(2*third_w), capture_height), (255, 255, 0), 1)
             # Draw horizontal thirds (for reference)
-            cv2.line(output, (0, third_h), (capture_width, third_h), (255, 255, 0), 1)
-            cv2.line(output, (0, 2*third_h), (capture_width, 2*third_h), (255, 255, 0), 1)
+            cv2.line(output, (0, int(third_h)), (capture_width, int(third_h)), (255, 255, 0), 1)
+            cv2.line(output, (0, int(2*third_h)), (capture_width, int(2*third_h)), (255, 255, 0), 1)
             # Draw center zone (middle vertical third)
-            cv2.rectangle(output, (center_zone_start_x, 0), (center_zone_end_x, capture_height), (0, 255, 0), 2)
+            cv2.rectangle(output, (int(center_zone_start_x), 0), (int(center_zone_end_x), capture_height), (0, 255, 0), 2)
             # Draw alert zone (intersection)
-            cv2.rectangle(output, (center_zone_start_x, alert_zone_top_y), (center_zone_end_x, alert_zone_bottom_y), (0, 0, 255), 2)
+            cv2.rectangle(output, (int(center_zone_start_x), int(alert_zone_top_y)), (int(center_zone_end_x), int(alert_zone_bottom_y)), (0, 0, 255), 2)
 
             # Analyze objects and determine alert
             direction_to_play, closest_object = analyze_objects(detected_objects, capture_width, capture_height)

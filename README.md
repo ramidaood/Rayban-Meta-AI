@@ -24,8 +24,7 @@ This project leverages Ray-Ban Meta smart glasses equipped with a live camera fe
 
 - **Backend**: Python (Flask, FastAPI), REST APIs, WebSockets
 - **AI Models**: OpenCV, TensorFlow, YOLO (for object detection)
-- **OCR**: Tesseract, Google Vision API
-- **Cloud Services**: AWS/GCP/Azure for hosting
+- **OCR**: Tesseract
 - **Communication**: WhatsApp/Messenger API
 
 ## **Project Timeline**
